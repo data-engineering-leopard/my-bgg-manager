@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My BGG Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">♟</span>
+      <span class="logo-text">BGG <em>Manager</em></span>
+    </div>
+    <div id="user-bar">
+      <span id="user-label"></span>
+      <button id="logout-btn" class="btn-ghost hidden">Log out</button>
+    </div>
+  </div>
+</header>
+
+<!-- LOGIN PANEL -->
+<section id="login-section">
+  <div class="card login-card">
+    <h1>Your Collection,<br><em>Managed.</em></h1>
+    <p class="subtitle">Sign in with your BoardGameGeek account to view, add, rate, and remove games from your collection.</p>
+    <div class="form-group">
+      <label>BGG Username</label>
+      <input id="username" type="text" placeholder="e.g. BoardGameFan42" autocomplete="username"/>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input id="password" type="password" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <div id="login-error" class="error-msg hidden"></div>
+    <button id="login-btn" class="btn-primary">Sign In</button>
+  </div>
+</section>
+
+<!-- MAIN APP -->
+<main id="app-section" class="hidden">
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <h2>My Collection <span id="game-count" class="count-badge"></span></h2>
+    </div>
+    <div class="toolbar-right">
+      <input id="filter-input" type="text" placeholder="Filter games…" class="filter-input"/>
+      <button id="add-game-btn" class="btn-primary">+ Add Game</button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="loading-state">
+    <div class="spinner"></div>
+    <p>Fetching your collection from BGG…</p>
+  </div>
+
+  <!-- Collection grid -->
+  <div id="collection-grid" class="game-grid"></div>
+
+  <!-- Empty state -->
+  <div id="empty-state" class="empty-state hidden">
+    <p>No games found. Try adding some!</p>
+  </div>
+
+</main>
+
+<!-- ADD GAME MODAL -->
+<div id="add-modal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-card">
+    <button class="modal-close" id="add-modal-close">✕</button>
+    <h3>Add a Game</h3>
+    <div class="form-group">
+      <label>Search BGG</label>
+      <input id="search-input" type="text" placeholder="e.g. Catan, Wingspan…"/>
+    </div>
+    <div id="search-results" class="search-results"></div>
+  </div>
+</div>
+
+<!-- RATE MODAL -->
+<div id="rate-modal" class="modal hidden">
+  <div class="modal-backdrop"></div>
+  <div class="modal-card">
+    <button class="modal-close" id="rate-modal-close">✕</button>
+    <h3>Rate <span id="rate-game-name"></span></h3>
+    <div class="star-row" id="star-row"></div>
+    <p class="rating-hint">Click a star to set your rating (1–10)</p>
+    <button id="clear-rating-btn" class="btn-ghost">Clear rating</button>
+    <button id="save-rating-btn" class="btn-primary">Save</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
