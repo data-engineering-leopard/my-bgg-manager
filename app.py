@@ -44,18 +44,45 @@ def login():
     if not username or not password:
         return jsonify({"error": "Username and password required"}), 400
 
-    # BGG login via their web form endpoint
     s = requests.Session()
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://boardgamegeek.com/login",
+        "Origin": "https://boardgamegeek.com",
+    })
+
+    # Try the newer JSON endpoint first
     resp = s.post(
         f"{BGG_BASE}/login/api/v1",
         json={"credentials": {"username": username, "password": password}},
         headers={"Content-Type": "application/json"},
     )
-    if resp.status_code == 200:
+
+    # Fall back to form-encoded POST if that didn't work
+    if resp.status_code != 200:
+        resp = s.post(
+            f"{BGG_BASE}/login",
+            data={
+                "username": username,
+                "password": password,
+                "redirect-to": "/",
+            },
+            allow_redirects=True,
+        )
+
+    # Check for a valid BGG session cookie as proof of login
+    cookies = dict(s.cookies)
+    logged_in = all(k in cookies for k in ("bggpassword", "bggusername", "SessionID"))
+
+    print(f"BGG status code: {resp.status_code}")
+    print(f"BGG cookies: {dict(s.cookies)}")
+
+    if logged_in:
         session["bgg_username"] = username
-        session["bgg_cookies"] = dict(s.cookies)
+        session["bgg_cookies"] = cookies
         return jsonify({"ok": True, "username": username})
-    return jsonify({"error": "Login failed – check your credentials"}), 401
+
+    return jsonify({"error": "Login failed – BGG did not accept these credentials"}), 401
 
 
 @app.route("/api/logout", methods=["POST"])
@@ -75,7 +102,9 @@ def get_collection():
     }
     # BGG sometimes returns 202 while it builds the list — retry up to 3×
     for _ in range(3):
-        resp = requests.get(f"{BGG_API}/collection", params=params)
+        s = bgg_session()
+        resp = s.get(f"{BGG_API}/collection", params=params)
+
         if resp.status_code == 200:
             break
         if resp.status_code == 202:
@@ -93,11 +122,13 @@ def get_collection():
         year_el = item.find("yearpublished")
         status_el = item.find("status")
 
+        print(f"Image URL: {image_el.text if image_el is not None else 'None'}")
+
         games.append({
             "id": item.get("objectid"),
             "name": name_el.text if name_el is not None else "Unknown",
             "year": year_el.text if year_el is not None else "",
-            "image": ("https:" + image_el.text) if image_el is not None and image_el.text else None,
+            "image": image_el.text if image_el is not None and image_el.text else None,
             "minplayers": stats.get("minplayers") if stats is not None else "",
             "maxplayers": stats.get("maxplayers") if stats is not None else "",
             "minplaytime": stats.get("minplaytime") if stats is not None else "",
@@ -184,6 +215,30 @@ def rate_game():
     if resp.status_code in (200, 204):
         return jsonify({"ok": True})
     return jsonify({"error": f"Failed to rate game (HTTP {resp.status_code})"}), 502
+
+
+@app.route("/api/login/debug", methods=["POST"])
+def login_debug():
+    """Temporary debug endpoint — remove before deploying."""
+    data = request.json
+    username = data.get("username", "").strip()
+    password = data.get("password", "").strip()
+    s = requests.Session()
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Referer": "https://boardgamegeek.com/login",
+        "Origin": "https://boardgamegeek.com",
+    })
+    resp = s.post(
+        f"{BGG_BASE}/login/api/v1",
+        json={"credentials": {"username": username, "password": password}},
+        headers={"Content-Type": "application/json"},
+    )
+    return jsonify({
+        "status_code": resp.status_code,
+        "cookies": dict(s.cookies),
+        "response_text": resp.text[:500],
+    })
 
 
 if __name__ == "__main__":

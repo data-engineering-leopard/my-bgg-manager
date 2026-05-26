@@ -9,19 +9,12 @@ const $ = id => document.getElementById(id);
 
 /* ── Init ── */
 document.addEventListener("DOMContentLoaded", () => {
-  const username = document.body.getAttribute("data-username") ||
-    document.querySelector("header")?.__username;
-
-  // Check if already logged in (server-side session)
-  fetch("/api/collection")
-    .then(r => r.ok ? r.json() : null)
-    .then(data => {
-      if (data) {
-        showApp();
-        renderCollection(data.games);
-      }
-    })
-    .catch(() => {});
+const username = document.body.dataset.username;
+if (username) {
+    $("user-label").textContent = username;
+    showApp();
+    loadCollection();
+}
 
   // Login
   $("login-btn").addEventListener("click", doLogin);
