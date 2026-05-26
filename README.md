@@ -13,7 +13,7 @@ A Flask web app to manage your [BoardGameGeek](https://boardgamegeek.com) collec
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/<your-username>/my-bgg-manager.git
+git clone https://github.com/data-engineering-leopard/my-bgg-manager.git
 cd my-bgg-manager
 
 # 2. Create and activate a virtual environment
