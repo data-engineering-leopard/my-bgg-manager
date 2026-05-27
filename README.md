@@ -37,3 +37,18 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in your browser.
 - **Backend**: Python / Flask
 - **API**: [BGG XML API v2](https://boardgamegeek.com/wiki/page/BGG_XML_API2)
 - **Frontend**: Vanilla JS + CSS
+
+## Known Limitations & Design Decisions
+
+### BGG Search API (Application Token Required)
+BGG's XML API search endpoint now requires a registered application token 
+(see https://boardgamegeek.com/using_the_xml_api). Rather than waiting for 
+token approval, the "Add Game" flow uses direct BGG game IDs or URLs instead 
+of free-text search.
+
+To add a game:
+1. Find the game on boardgamegeek.com
+2. Copy the URL (e.g. https://boardgamegeek.com/boardgame/448419/vampire-lords)
+3. Paste it into the Add Game field — the app extracts the ID automatically
+
+**Future improvement**: Replace with proper API token search once a token is obtained.

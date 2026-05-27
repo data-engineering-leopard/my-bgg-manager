@@ -2,13 +2,13 @@ from flask import Flask, render_template, request, jsonify, session
 import requests
 import xml.etree.ElementTree as ET
 from functools import wraps
+import subprocess
 
 app = Flask(__name__)
 app.secret_key = "change-me-to-a-random-secret"
 
 BGG_API = "https://boardgamegeek.com/xmlapi2"
 BGG_BASE = "https://boardgamegeek.com"
-
 
 # ---------- helpers ----------
 
@@ -70,16 +70,19 @@ def login():
             allow_redirects=True,
         )
 
-    # Check for a valid BGG session cookie as proof of login
-    cookies = dict(s.cookies)
-    logged_in = all(k in cookies for k in ("bggpassword", "bggusername", "SessionID"))
+    # Deduplicate cookies, keeping the last value for each key
+    deduped = {}
+    for cookie in s.cookies:
+        deduped[cookie.name] = cookie.value
 
-    print(f"BGG status code: {resp.status_code}")
-    print(f"BGG cookies: {dict(s.cookies)}")
+    logged_in = (
+            resp.status_code in (200, 204, 302, 403)
+            and any(k in deduped for k in ("bggpassword", "bggusername", "SessionID"))
+    )
 
     if logged_in:
         session["bgg_username"] = username
-        session["bgg_cookies"] = cookies
+        session["bgg_cookies"] = deduped
         return jsonify({"ok": True, "username": username})
 
     return jsonify({"error": "Login failed – BGG did not accept these credentials"}), 401
@@ -122,8 +125,6 @@ def get_collection():
         year_el = item.find("yearpublished")
         status_el = item.find("status")
 
-        print(f"Image URL: {image_el.text if image_el is not None else 'None'}")
-
         games.append({
             "id": item.get("objectid"),
             "name": name_el.text if name_el is not None else "Unknown",
@@ -144,12 +145,33 @@ def get_collection():
 
 
 @app.route("/api/search")
+@require_login
 def search_games():
     query = request.args.get("q", "").strip()
     if not query:
         return jsonify({"results": []})
-    resp = requests.get(f"{BGG_API}/search", params={"query": query, "type": "boardgame"})
-    root = ET.fromstring(resp.text)
+
+    cookies = session.get("bgg_cookies", {})
+
+    result = subprocess.run([
+        "curl", "-s", "-L",
+        "--cookie", "; ".join(f"{k}={v}" for k, v in cookies.items()),
+        "-H",
+        "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "-H", "Accept: application/xml, text/xml, */*",
+        "-H", "Referer: https://boardgamegeek.com/",
+        "-H", "Origin: https://boardgamegeek.com",
+        f"https://boardgamegeek.com/xmlapi2/search?query={requests.utils.quote(query)}&type=boardgame"
+    ], capture_output=True, text=True)
+
+    print(f"Curl stdout: {result.stdout[:300]}")
+    print(f"Curl stderr: {result.stderr[:300]}")
+
+    try:
+        root = ET.fromstring(result.stdout)
+    except ET.ParseError:
+        return jsonify({"error": "Search unavailable", "results": []}), 502
+
     results = []
     for item in root.findall("item"):
         name_el = item.find("name")
@@ -161,6 +183,34 @@ def search_games():
         })
     return jsonify({"results": results[:20]})
 
+@app.route("/api/lookup")
+@require_login
+def lookup_game():
+    game_id = request.args.get("game_id", "").strip()
+    if not game_id:
+        return jsonify({"error": "game_id required"}), 400
+    s = bgg_session()
+    resp = s.get(f"{BGG_API}/thing", params={"id": game_id, "type": "boardgame"})
+    print(f"Lookup status: {resp.status_code}")
+    print(f"Lookup cookies being sent: {dict(s.cookies)}")
+
+    if resp.status_code != 200:
+        return jsonify({"error": f"BGG API error {resp.status_code}"}), 502
+    try:
+        root = ET.fromstring(resp.text)
+        item = root.find("item")
+        if item is None:
+            return jsonify({"error": "Game not found"}), 404
+        name_el = item.find(".//name[@type='primary']")
+        year_el = item.find("yearpublished")
+        return jsonify({
+            "id": game_id,
+            "name": name_el.get("value") if name_el is not None else "Unknown",
+            "year": year_el.get("value") if year_el is not None else "",
+        })
+
+    except ET.ParseError:
+        return jsonify({"error": "Unexpected response from BGG"}), 502
 
 @app.route("/api/collection/add", methods=["POST"])
 @require_login

@@ -10,7 +10,7 @@ const $ = id => document.getElementById(id);
 /* ── Init ── */
 document.addEventListener("DOMContentLoaded", () => {
 const username = document.body.dataset.username;
-if (username) {
+if (username && username !== "None") {
     $("user-label").textContent = username;
     showApp();
     loadCollection();
@@ -37,17 +37,17 @@ if (username) {
   $("add-modal-close").addEventListener("click", () => closeModal("add-modal"));
   $("add-modal").querySelector(".modal-backdrop").addEventListener("click", () => closeModal("add-modal"));
 
-  // Search
-  $("search-input").addEventListener("input", () => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(doSearch, 350);
-  });
-
   // Rate modal
   $("rate-modal-close").addEventListener("click", () => closeModal("rate-modal"));
   $("rate-modal").querySelector(".modal-backdrop").addEventListener("click", () => closeModal("rate-modal"));
   $("clear-rating-btn").addEventListener("click", () => { ratingValue = 0; renderStars(0); });
   $("save-rating-btn").addEventListener("click", saveRating);
+
+    // Search
+  $("search-input").addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(doSearch, 350);
+  });
 
   buildStarButtons();
 });
@@ -179,37 +179,49 @@ async function confirmRemove(gameId, name) {
   }
 }
 
-/* ── Search & Add ── */
 async function doSearch() {
   const q = $("search-input").value.trim();
   const results = $("search-results");
   if (!q) { results.innerHTML = ""; return; }
-  results.innerHTML = `<div class="search-empty">Searching…</div>`;
 
-  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-  const data = await res.json();
+  // Extract game ID from a BGG URL or use directly if numeric
+  let gameId = null;
+  const urlMatch = q.match(/boardgamegeek\.com\/boardgame\/(\d+)/);
+  if (urlMatch) {
+    gameId = urlMatch[1];
+  } else if (/^\d+$/.test(q)) {
+    gameId = q;
+  }
 
-  if (!data.results.length) {
-    results.innerHTML = `<div class="search-empty">No results found.</div>`;
+  if (!gameId) {
+    results.innerHTML = `<div class="search-empty">Please paste a BGG game URL or ID.<br><small>e.g. https://boardgamegeek.com/boardgame/448419/vampire-lords</small></div>`;
     return;
   }
+
+  results.innerHTML = `<div class="search-empty">Looking up game…</div>`;
+  const res = await fetch(`/api/lookup?game_id=${gameId}`);
+  const data = await res.json();
+
+  if (data.error) {
+    results.innerHTML = `<div class="search-empty">${escHtml(data.error)}</div>`;
+    return;
+  }
+
+  const alreadyOwned = allGames.some(g => g.id === data.id);
   results.innerHTML = "";
-  data.results.forEach(item => {
-    const row = document.createElement("div");
-    row.className = "search-result-item";
-    const alreadyOwned = allGames.some(g => g.id === item.id);
-    row.innerHTML = `
-      <div>
-        <div>${escHtml(item.name)}</div>
-        <div class="game-year">${item.year || ""}</div>
-      </div>
-      <button class="btn-primary add-btn" data-id="${item.id}" data-name="${escHtml(item.name)}"
-        ${alreadyOwned ? "disabled title='Already in collection'" : ""}>
-        ${alreadyOwned ? "✓ Owned" : "+ Add"}
-      </button>`;
-    row.querySelector(".add-btn").addEventListener("click", () => addGame(item.id, item.name));
-    results.appendChild(row);
-  });
+  const row = document.createElement("div");
+  row.className = "search-result-item";
+  row.innerHTML = `
+    <div>
+      <div>${escHtml(data.name)}</div>
+      <div class="game-year">${data.year || ""}</div>
+    </div>
+    <button class="btn-primary add-btn" data-id="${data.id}" data-name="${escHtml(data.name)}"
+      ${alreadyOwned ? "disabled title='Already in collection'" : ""}>
+      ${alreadyOwned ? "✓ Owned" : "+ Add"}
+    </button>`;
+  row.querySelector(".add-btn").addEventListener("click", () => addGame(data.id, data.name));
+  results.appendChild(row);
 }
 
 async function addGame(gameId, name) {
